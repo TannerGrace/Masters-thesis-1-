@@ -1,13 +1,14 @@
-#Load the required packages 
+
+#Loading required packages 
 
 library(dplyr)
 library(tidyverse)
 library(cowplot)
 library(viridis)
+library(stats)
 
 
-
-####################################################
+######################################################################
 #Chalkbrood analysis 
 
 #Import the data 
@@ -37,10 +38,15 @@ cb_apiary_mean<-cb_collapsed %>%
   group_by(inspection_year,inspection_month) %>% 
   summarise(chalkbrood_present=mean(chalkbrood_present))
 
+#Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
+cb_model<-glm(chalkbrood_present~inspection_year*inspection_month, family=binomial(), data=cb_collapsed)
+
+plot(cb_model)
+summary(cb_model)
 
 
 #For plots records where less than 10 apiaries were removed to remove skews from plots 
-#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+#Create a separate dataset with which to plot trends. 
 
 cb_collapsed2 <- cb %>%
   group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
@@ -88,7 +94,8 @@ plot(cb_lines)
 #######################################################################################################################################
 #Sacbrood analysis 
 
-#read in the data 
+
+#Import the data 
 data_sacbrood<-read.csv(file.choose())
 
 #create a subset of the data
@@ -115,8 +122,15 @@ sb_apiary_mean<-sb_collapsed %>%
   group_by(inspection_year,inspection_month) %>% 
   summarise(sacbrood_present=mean(sacbrood_present))
 
+#Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
+sb_model<-glm(sacbrood_present~inspection_year*inspection_month,family=binomial(), data=sb_collapsed)
+
+plot(sb_model)
+summary(sb_model)
+
+
 #For plots records where less than 10 apiaries were removed to remove skews from plots 
-#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+#Create a separate dataset with which to plot trends. 
 
 sb_collapsed2 <- sb %>%
   group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
@@ -160,8 +174,12 @@ sb_lines<-ggplot(sb_apiary_robustmean, aes(x=inspection_month, y=sacbrood_presen
 plot(sb_lines)
 
 
+
+
 ####################################################################
-#Varroosis analysis 
+#Varoosis analysis 
+
+#Import the data 
 data_varroosis<-read.csv(file.choose())
 
 #create a subset of the data
@@ -188,10 +206,15 @@ varo_apiary_mean2<-varo_collapsed2 %>%
   group_by(inspection_year,inspection_month) %>% 
   summarise(varroosis_present=mean(varroosis_present))
 
+#Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
+Varo_model<-glm(varroosis_present~inspection_year*inspection_month,family=binomial(), data=varo_collapsed)
+
+plot(Varo_model)
+summary(Varo_model)
 
 
 #For plots records where less than 10 apiaries were removed to remove skews from plots 
-#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+#Create a separate dataset with which to plot trends. 
 
 varo_collapsed2 <- varo %>%
   group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
@@ -236,10 +259,11 @@ plot(varo_lines)
 ####################################################################
 #AFB analysis 
 
-#read in the data 
+#Import the data 
 data_afb<-read.csv(file.choose())
 
-#Converting AFB data to binary to make it presence/absence like the other diseases- as initial collection is summed total of hives with AFB in an apiary.
+#Make the data binary for AFB to conver it to presence/absence data like the other diseases being analysed 
+
 data_afb$no_of_cols_with_afb[is.na(data_afb$no_of_cols_with_afb)]<-0
 data_afb$afb_bin<-data_afb$no_of_cols_with_afb
 data_afb$afb_bin<-replace(data_afb$afb_bin, data_afb$afb_bin >1,1)
@@ -270,9 +294,15 @@ afb_apiary_mean<-afb_collapsed %>%
   summarise(afb_bin_present=mean(afb_bin_present))
 
 
+#Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
+afb_model<-glm(afb_bin_present~inspection_year*inspection_month,family=binomial(), data=afb_collapsed)
+
+plot(afb_model)
+summary(afb_model)
+
 
 #For plots records where less than 10 apiaries were removed to remove skews from plots 
-#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+#Create a separate dataset with which to plot trends. 
 
 afb_collapsed2 <- afb %>%
   group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
@@ -315,12 +345,12 @@ afb_lines<-ggplot(afb_apiary_robustmean, aes(x=inspection_month, y=afb_bin_prese
 plot(afb_lines)
 
 ####################################################################
-#EFB analysis 
+#EFB analysis
 
-#read in the data
+#Import the data 
 data_efb<-read.csv(file.choose())
 
-#Converting EFB data to binary to make it presence/absence like the other diseases- as initial collection is summed total of hives with EFB in an apiary.
+#Make the data binary for EFB to conver it to presence/absence data like the other diseases being analysed 
 
 data_efb$no_of_cols_with_efb[is.na(data_efb$no_of_cols_with_efb)]<-0
 data_efb$efb_bin<-data_efb$no_of_cols_with_efb
@@ -351,9 +381,16 @@ efb_apiary_mean<-efb_collapsed %>%
   group_by(inspection_year,inspection_month) %>% 
   summarise(efb_bin_present=mean(efb_bin_present))
 
+#Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
+
+efb_model<-glm(efb_bin_present~inspection_year*inspection_month,family=binomial(),data=efb_collapsed)
+
+plot(efb_model)
+summary(efb_model)
+
 
 #For plots records where less than 10 apiaries were removed to remove skews from plots 
-#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+#Create a separate dataset with which to plot trends. 
 efb_collapsed2 <- efb %>%
   group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
 
@@ -396,3 +433,8 @@ efb_lines<-ggplot(efb_apiary_robustmean, aes(x=inspection_month, y=efb_bin_prese
   )
 
 plot(efb_lines)
+
+
+
+
+
