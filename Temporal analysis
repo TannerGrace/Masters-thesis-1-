@@ -1,0 +1,398 @@
+#Load the required packages 
+
+library(dplyr)
+library(tidyverse)
+library(cowplot)
+library(viridis)
+
+
+
+####################################################
+#Chalkbrood analysis 
+
+#Import the data 
+data_chalkbrood<-read.csv(file.choose())
+
+#create a subset of the data
+cb<-subset(data_chalkbrood, 
+           select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for chalkbrood. 
+cb<-cb[!is.na(cb$chalkbrood),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+cb_collapsed <- cb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+cb_collapsed$chalkbrood_present<-cb_collapsed$chalkbrood_sum
+cb_collapsed$chalkbrood_present<- replace(cb_collapsed$chalkbrood_present, cb_collapsed$chalkbrood_present >1,1)
+
+#get the means for temporal analysis
+
+cb_apiary_mean<-cb_collapsed %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(chalkbrood_present=mean(chalkbrood_present))
+
+
+
+#For plots records where less than 10 apiaries were removed to remove skews from plots 
+#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+
+cb_collapsed2 <- cb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+cb_collapsed2$chalkbrood_present<-cb_collapsed$chalkbrood_sum
+cb_collapsed2$chalkbrood_present<- replace(cb_collapsed2$chalkbrood_present, cb_collapsed2$chalkbrood_present >1,1)
+
+#get the means for plotting 
+
+cb_apiary_mean2<-cb_collapsed2 %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(chalkbrood_present=mean(chalkbrood_present),(n=n()))
+
+#Changing titles 
+colnames(cb_apiary_mean2)[which(names(cb_apiary_mean2) == "(n = n())")] <- "TotalApiaries"
+
+#Filtering data
+cb_apiary_robustmean<-subset(cb_apiary_mean2, TotalApiaries >= 10)
+head(cb_apiary_robustmean)
+
+#adding in month abbreviations for plotting 
+cb_apiary_robustmean$inspection_month<-month.abb[cb_apiary_robustmean$inspection_month]
+cb_apiary_robustmean$inspection_month=factor(cb_apiary_robustmean$inspection_month, levels=month.abb)
+
+#Making year a factor for plotting
+cb_apiary_robustmean$inspection_year<-as.factor(cb_apiary_robustmean$inspection_year)
+
+#Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
+cb_lines<-ggplot(cb_apiary_robustmean, aes(x=inspection_month, y=chalkbrood_present, color=inspection_year, group=inspection_year))+
+  labs(x="Inspection month", y="Chalkbrood prevalence")+geom_line(aes(color=inspection_year))+theme_cowplot(12)+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+plot(cb_lines)
+
+
+#repeat the above for all diseases 
+#######################################################################################################################################
+#Sacbrood analysis 
+
+#read in the data 
+data_sacbrood<-read.csv(file.choose())
+
+#create a subset of the data
+sb<-subset(data_sacbrood, 
+           select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for sacbrood. 
+sb<-sb[!is.na(sb$sacbrood),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+sb_collapsed <- sb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+sb_collapsed$sacbrood_present<-sb_collapsed$sacbrood_sum
+sb_collapsed$sacbrood_present<- replace(sb_collapsed$sacbrood_present, sb_collapsed$sacbrood_present >1,1)
+
+#get the means for temporal analysis 
+
+sb_apiary_mean<-sb_collapsed %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(sacbrood_present=mean(sacbrood_present))
+
+#For plots records where less than 10 apiaries were removed to remove skews from plots 
+#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+
+sb_collapsed2 <- sb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+sb_collapsed2$sacbrood_present<-sb_collapsed2$sacbrood_sum
+sb_collapsed$sacbrood_present<- replace(sb_collapsed2$sacbrood_present, sb_collapsed2$sacbrood_present >1,1)
+
+#get the means for plotting 
+
+sb_apiary_mean2<-sb_collapsed2 %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(sacbrood_present=mean(sacbrood_present),(n=n()))
+
+colnames(sb_apiary_mean2)[which(names(sb_apiary_mean2) == "(n = n())")] <- "TotalApiaries"
+
+
+sb_apiary_robustmean<-subset(sb_apiary_mean2, TotalApiaries >= 10)
+head(sb_apiary_robustmean)
+
+#adding in month abbreviations for plotting 
+sb_apiary_robustmean$inspection_month<-month.abb[sb_apiary_robustmean$inspection_month]
+sb_apiary_robustmean$inspection_month=factor(sb_apiary_robustmean$inspection_month, levels=month.abb)
+
+#Making year a factor for plotting
+sb_apiary_robustmean$inspection_year<-as.factor(sb_apiary_robustmean$inspection_year)
+
+#Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
+sb_lines<-ggplot(sb_apiary_robustmean, aes(x=inspection_month, y=sacbrood_present, color=inspection_year, group=inspection_year))+
+  labs(x="Inspection month", y="Sacbrood prevalence")+geom_line()+theme_cowplot(12)+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+
+plot(sb_lines)
+
+
+####################################################################
+#Varroosis analysis 
+data_varroosis<-read.csv(file.choose())
+
+#create a subset of the data
+varo<-subset(data_varroosis, 
+             select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for varroosis. 
+varo<-varo[!is.na(varo$varroosis),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+varo_collapsed2 <- varo %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+varo_collapsed2$varroosis_present<-varo_collapsed2$varroosis_sum
+varo_collapsed2$varroosis_present<- replace(varo_collapsed2$varroosis_present, varo_collapsed$varroosis_present >1,1)
+
+#get the means for temporal analysis 
+
+varo_apiary_mean2<-varo_collapsed2 %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(varroosis_present=mean(varroosis_present))
+
+
+
+#For plots records where less than 10 apiaries were removed to remove skews from plots 
+#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+
+varo_collapsed2 <- varo %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+varo_collapsed2$varroosis_present<-varo_collapsed2$varroosis_sum
+varo_collapsed$varoosis_present<- replace(varo_collapsed2$varroosis_present, varo_collapsed2$varroosis_present >1,1)
+
+#get the means for plotting 
+
+varo_apiary_mean2<-varo_collapsed2 %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(varroosis_present=mean(varroosis_present),(n=n()))
+
+colnames(varo_apiary_mean2)[which(names(varo_apiary_mean2) == "(n = n())")] <- "TotalApiaries"
+
+
+varo_apiary_robustmean<-subset(varo_apiary_mean2, TotalApiaries >= 10)
+head(varo_apiary_robustmean)
+
+#adding in month abbreviations for plotting 
+varo_apiary_robustmean$inspection_month<-month.abb[varo_apiary_robustmean$inspection_month]
+varo_apiary_robustmean$inspection_month=factor(varo_apiary_robustmean$inspection_month, levels=month.abb)
+
+#Making year a factor for plotting 
+varo_apiary_robustmean$inspection_year<-as.factor(varo_apiary_robustmean$inspection_year)
+
+#Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
+varo_lines<-ggplot(varo_apiary_robustmean, aes(x=inspection_month, y=varroosis_present, color=inspection_year, group=inspection_year))+
+  labs(x="Inspection month", y="Varroosis prevalence")+geom_line()+theme_cowplot(12)+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+plot(varo_lines)
+
+####################################################################
+#AFB analysis 
+
+#read in the data 
+data_afb<-read.csv(file.choose())
+
+#Converting AFB data to binary to make it presence/absence like the other diseases- as initial collection is summed total of hives with AFB in an apiary.
+data_afb$no_of_cols_with_afb[is.na(data_afb$no_of_cols_with_afb)]<-0
+data_afb$afb_bin<-data_afb$no_of_cols_with_afb
+data_afb$afb_bin<-replace(data_afb$afb_bin, data_afb$afb_bin >1,1)
+
+
+#create a subset of the data
+afb<-subset(data_afb, 
+            select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned, no_of_cols_with_afb))
+
+#remove rows where there are no entries for AFB. 
+afb<-afb[!is.na(afb$afb_bin),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+afb_collapsed <- afb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+afb_collapsed$afb_bin_present<-afb_collapsed$afb_bin_sum
+afb_collapsed$afb_bin_present<- replace(afb_collapsed$afb_bin_present, afb_collapsed$afb_bin_present >1,1)
+
+#Get the means for temporal analysis  
+
+afb_apiary_mean<-afb_collapsed %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(afb_bin_present=mean(afb_bin_present))
+
+
+
+#For plots records where less than 10 apiaries were removed to remove skews from plots 
+#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+
+afb_collapsed2 <- afb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+afb_collapsed2$afb_bin_present<-afb_collapsed2$afb_bin_sum
+afb_collapsed2$afb_bin_present<- replace(afb_collapsed2$afb_bin_present, afb_collapsed2$afb_bin_present >1,1)
+
+#get the means for plotting 
+
+afb_apiary_mean2<-afb_collapsed2 %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(afb_bin_present=mean(afb_bin_present),(n=n()))
+
+colnames(afb_apiary_mean2)[which(names(afb_apiary_mean2) == "(n = n())")] <- "TotalApiaries"
+
+
+afb_apiary_robustmean<-subset(afb_apiary_mean2, TotalApiaries >= 10)
+head(afb_apiary_robustmean)
+
+
+#adding in month abbreviations for plotting 
+afb_apiary_robustmean$inspection_month<-month.abb[afb_apiary_robustmean$inspection_month]
+afb_apiary_robustmean$inspection_month=factor(afb_apiary_robustmean$inspection_month, levels=month.abb)
+#Making year a factor for plotting
+afb_apiary_robustmean$inspection_year<-as.factor(afb_apiary_robustmean$inspection_year)
+
+#Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
+afb_lines<-ggplot(afb_apiary_robustmean, aes(x=inspection_month, y=afb_bin_present, color=inspection_year, group=inspection_year))+
+  labs(x="Inspection month", y="AFB prevalence")+geom_line()+theme_cowplot(12)+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+plot(afb_lines)
+
+####################################################################
+#EFB analysis 
+
+#read in the data
+data_efb<-read.csv(file.choose())
+
+#Converting EFB data to binary to make it presence/absence like the other diseases- as initial collection is summed total of hives with EFB in an apiary.
+
+data_efb$no_of_cols_with_efb[is.na(data_efb$no_of_cols_with_efb)]<-0
+data_efb$efb_bin<-data_efb$no_of_cols_with_efb
+data_efb$efb_bin<-replace(data_efb$efb_bin, data_efb$efb_bin >1,1)
+
+
+#create a subset of the data
+efb<-subset(data_efb, 
+            select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned, no_of_cols_with_efb))
+
+#remove rows where there are no entries for EFB. 
+efb<-efb[!is.na(efb$efb_bin),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+efb_collapsed <- efb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+efb_collapsed$efb_bin_present<-efb_collapsed$efb_bin_sum
+efb_collapsed$efb_bin_present<- replace(efb_collapsed$efb_bin_present, efb_collapsed$efb_bin_present >1,1)
+
+#get the means for temporal analysis 
+
+efb_apiary_mean<-efb_collapsed %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(efb_bin_present=mean(efb_bin_present))
+
+
+#For plots records where less than 10 apiaries were removed to remove skews from plots 
+#Create a separate dataset with which to plot data, we will not use this data for temporal analysis.
+efb_collapsed2 <- efb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+efb_collapsed2$efb_bin_present<-efb_collapsed2$efb_bin_sum
+efb_collapsed2$efb_bin_present<- replace(efb_collapsed2$efb_bin_present, efb_collapsed2$efb_bin_present >1,1)
+
+#get the means for plotting 
+
+efb_apiary_mean2<-efb_collapsed2 %>% 
+  group_by(inspection_year,inspection_month) %>% 
+  summarise(efb_bin_present=mean(efb_bin_present),(n=n()))
+
+
+colnames(efb_apiary_mean2)[which(names(efb_apiary_mean2) == "(n = n())")] <- "TotalApiaries"
+
+
+efb_apiary_robustmean<-subset(efb_apiary_mean2, TotalApiaries >= 10)
+head(efb_apiary_robustmean)
+
+
+
+#adding in month abbreviations for plotting 
+efb_apiary_robustmean$inspection_month<-month.abb[efb_apiary_robustmean$inspection_month]
+efb_apiary_robustmean$inspection_month=factor(efb_apiary_robustmean$inspection_month, levels=month.abb)
+#Making year a factor for plotting 
+efb_apiary_robustmean$inspection_year<-as.factor(efb_apiary_robustmean$inspection_year)
+
+#Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
+efb_lines<-ggplot(efb_apiary_robustmean, aes(x=inspection_month, y=efb_bin_present, color=inspection_year, group=inspection_year))+
+  labs(x="Inspection month", y="EFB prevalence")+geom_line()+theme_cowplot(12)+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D", 
+    
+  )
+
+plot(efb_lines)
