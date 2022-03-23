@@ -1,0 +1,559 @@
+
+#Load the required packages 
+library(dplyr)
+library(tidyverse)
+library(spdep)
+library(cowplot)
+library(maps)
+library(ggplot2)
+
+
+
+#####################################################
+#Chalkbrood analysis 
+#Import the data 
+data_chalkbrood<-read.csv(file.choose())
+
+#create a subset of the data
+cb<-subset(data_chalkbrood, 
+           select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for chalkbrood. 
+cb<-cb[!is.na(cb$chalkbrood),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+cb_collapsed <- cb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+cb_collapsed$chalkbrood_present<-cb_collapsed$chalkbrood_sum
+cb_collapsed$chalkbrood_present<- replace(cb_collapsed$chalkbrood_present, cb_collapsed$chalkbrood_present >1,1)
+
+#Collation of apiary data irrespective of time
+cb_apiary_mean_notime <-cb_collapsed %>% 
+  group_by(apiary_id) %>% 
+  summarise(chalkbrood_present = mean(chalkbrood_present),(n = n()))
+head(cb_apiary_mean_notime)
+
+
+colnames(cb_apiary_mean_notime)[which(names(cb_apiary_mean_notime) == "(n = n())")] <- "Apiary_survey_months"
+
+#Checking everything is correct. 
+#Sum of Apiary_survey_months tally should equal the number of rows as the previous df where 
+#row = a unique apiary*monty*year event
+
+sum(cb_apiary_mean_notime$"Apiary_survey_months")
+
+
+## bring back in apiary data
+cb_meta= subset(data_chalkbrood, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,chalkbrood, num_of_colonies_inspected, inspection_year, inspection_month))
+
+head(cb_meta)
+
+cb_merged<-merge(cb_meta,cb_apiary_mean_notime, by="apiary_id")
+head(cb_merged)
+
+#Remove duplicate rows from the data frame to prevent skewing of results from repeats 
+cb_spatial_prev<- cb_merged[!duplicated(cb_merged$apiary_id),]
+
+
+#Filter out any entries where an individual apiary is surveyed on less than 10 monthly occations to improve robsutness of dataset 
+cb_spatial_robustmean<-subset(cb_spatial_prev, Apiary_survey_months >= 10)
+head(cb_spatial_robustmean)
+glimpse(cb_spatial_robustmean)
+
+
+#Moran's I analysis 
+#Creating neighbours list with k nearest neighbour technique
+coordinates(cb_spatial_robustmean)<- ~ Long+Lat
+cb_knea<-knearneigh(coordinates(cb_spatial_robustmean), longlat=T)
+cb_neib<-knn2nb(cb_knea)
+cb_list<-nb2listw(cb_neib)
+#Checking neighbours list is in the correct format for insertion into moran.test 
+class(cb_list)
+
+#Apply moran.test function to complete the Moran's I test of spatial autocorrelation 
+cb_moran<-moran.test(cb_spatial_robustmean$chalkbrood_present,cb_list,alternative = "greater")
+
+#Obtaining the z score for this test (Should be approximately the same as the Standard deviations in the origingal test output.)
+cb_z_score<-((cb_moran$estimate["Moran I statistic"]-cb_moran$estimate["Expectation"])/sqrt(cb_moran$estimate["Variance"]))
+
+
+print(cb_z_score)
+#################################################################################################################################################
+#Repeat the above steps for each disease we have. 
+
+
+#Sacbrood analysis 
+#Import data 
+
+data_sacbrood<-read.csv(file.choose())
+
+#create a subset of the data
+sb<-subset(data_sacbrood, 
+           select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for chalkbrood. 
+sb<-sb[!is.na(sb$sacbrood),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+sb_collapsed <- sb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+sb_collapsed$sacbrood_present<-sb_collapsed$sacbrood_sum
+sb_collapsed$sacbrood_present<- replace(sb_collapsed$sacbrood_present, sb_collapsed$sacbrood_present >1,1)
+
+
+#Collation of apiary data irrespective of time
+
+sb_apiary_mean_notime <-sb_collapsed %>% 
+  group_by(apiary_id) %>% 
+  summarise(sacbrood_present = mean(sacbrood_present),(n = n()))
+head(sb_apiary_mean_notime)
+
+
+colnames(sb_apiary_mean_notime)[which(names(sb_apiary_mean_notime) == "(n = n())")] <- "Apiary_survey_months"
+
+# Checking data
+#Sum of Apiary_survey_months tally should equal the number of rows as the previous df where 
+#row = a unique apiary*monty*year event
+sum(sb_apiary_mean_notime$"Apiary_survey_months")
+
+
+## bring back in apiary data for spatial analysis 
+sb_meta= subset(data_sacbrood, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned, sacbrood, num_of_colonies_inspected, inspection_year, inspection_month))
+
+head(sb_meta)
+
+sb_merged<-merge(sb_meta,sb_apiary_mean_notime, by="apiary_id")
+head(sb_merged)
+
+#Remove duplicate rows from the data frame to prevent skewing of results from repeats 
+sb_spatial_prev<- sb_merged[!duplicated(sb_merged$apiary_id),]
+
+
+#Filter out any entries where an individual apiary is surveyed on less than 10 monthly occations to improve robsutness of dataset 
+sb_spatial_robustmean<-subset(sb_spatial_prev, Apiary_survey_months >= 10)
+head(sb_spatial_robustmean)
+glimpse(sb_spatial_robustmean)
+
+#Moran's I analysis 
+#Creating neighbours list with k nearest neighbour technique
+coordinates(sb_spatial_robustmean)<- ~ Long+Lat
+sac_knea<-knearneigh(coordinates(sb_spatial_robustmean), longlat=T)
+sac_neib<-knn2nb(sac_knea)
+sac_list<-nb2listw(sac_neib)
+#Checking neighbours list is in the correct format for insertion into moran.test 
+class(sac_list)
+
+#Moran's I test 
+sb_moran<-moran.test(sb_spatial_robustmean$sacbrood_present,sac_list,alternative = "greater")
+
+#Obtaining the z score for this test (Should be approximately the same as the Standard deviations in the origingal test output.)
+sb_z_score<-((sb_moran$estimate["Moran I statistic"]-sb_moran$estimate["Expectation"])/sqrt(sb_moran$estimate["Variance"]))
+
+
+print(sb_z_score)
+
+
+#################################################################################################################################################
+#Varroosis analyis 
+
+#Import data 
+data_varroosis<-read.csv(file.choose())
+
+#create a subset of the data
+varo<-subset(data_varroosis, 
+             select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for chalkbrood. 
+varo<-varo[!is.na(varo$varroosis),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+varo_collapsed2 <- varo %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+varo_collapsed2$varroosis_present<-varo_collapsed2$varroosis_sum
+varo_collapsed2$varroosis_present<- replace(varo_collapsed2$varroosis_present, varo_collapsed$varroosis_present >1,1)
+
+
+#Collation of apiary data irrespective of time
+varo_apiary_mean_notime <-varo_collapsed %>% 
+  group_by(apiary_id) %>% 
+  summarise(varroosis_present = mean(varroosis_present),(n = n()))
+head(varo_apiary_mean_notime)
+
+
+colnames(varo_apiary_mean_notime)[which(names(varo_apiary_mean_notime) == "(n = n())")] <- "Apiary_survey_months"
+
+# Checking data
+#Sum of Apiary_survey_months tally should equal the number of rows as the previous df where 
+#row = a unique apiary*monty*year event
+sum(varo_apiary_mean_notime$"Apiary_survey_months")
+
+## Bring back in apiary data for spatial analysis 
+varo_meta= subset(data_varroosis, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,varroosis, num_of_colonies_inspected, inspection_year, inspection_month))
+
+head(varo_meta)
+
+varo_merged<-merge(varo_meta,varo_apiary_mean_notime, by="apiary_id")
+head(varo_merged)
+
+#Remove duplicate rows from the data frame to prevent skewing of results from repeats 
+varo_spatial_prev<- varo_merged[!duplicated(varo_merged$apiary_id),]
+
+#Filter out any entries where an individual apiary is surveyed on less than 10 monthly occations to improve the robustness of the data 
+varo_spatial_robustmean<-subset(varo_spatial_prev, Apiary_survey_months >= 10)
+head(varo_spatial_robustmean)
+glimpse(varo_spatial_robustmean)
+
+#Moran's I analysis 
+#Creating neighbours list with k nearest neighbour technique
+coordinates(varo_spatial_robustmean)<- ~ Long+Lat
+varo_knea<-knearneigh(coordinates(varo_spatial_robustmean), longlat=T)
+varo_neib<-knn2nb(varo_knea)
+varo_list<-nb2listw(varo_neib)
+#Checking neighbours list is in the correct format for insertion into moran.test 
+class(varo_list)
+
+#Moran's I test 
+varo_moran<-moran.test(varo_spatial_robustmean$varroosis_present,varo_list,alternative = "greater")
+
+#Obtaining the z score for this test (Should be approximately the same as the Standard deviations in the origingal test output.)
+varo_z_score<-((varo_moran$estimate["Moran I statistic"]-varo_moran$estimate["Expectation"])/sqrt(varo_moran$estimate["Variance"]))
+
+
+print(varo_z_score)
+
+
+#################################################################################################################################################
+#AFB analysis 
+
+#Import the data 
+data_afb<-read.csv(file.choose())
+
+#Convert AFB data into binary to make it presence/absesnce like other diseases analysed
+data_afb$no_of_cols_with_afb[is.na(data_afb$no_of_cols_with_afb)]<-0
+data_afb$afb_bin<-data_afb$no_of_cols_with_afb
+data_afb$afb_bin<-replace(data_afb$afb_bin, data_afb$afb_bin >1,1)
+
+
+#create a subset of the data
+afb<-subset(data_afb, 
+            select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned, no_of_cols_with_afb))
+
+#remove rows where there are no entries for chalkbrood. 
+afb<-afb[!is.na(afb$afb_bin),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+afb_collapsed <- afb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+afb_collapsed$afb_bin_present<-afb_collapsed$afb_bin_sum
+afb_collapsed$afb_bin_present<- replace(afb_collapsed$afb_bin_present, afb_collapsed$afb_bin_present >1,1)
+
+#Collation of apiary data irrespective of time
+
+afb_apiary_mean_notime <-afb_collapsed %>% 
+  group_by(apiary_id) %>% 
+  summarise(afb_bin_present = mean(afb_bin_present),(n = n()))
+head(afb_apiary_mean_notime)
+
+
+colnames(afb_apiary_mean_notime)[which(names(afb_apiary_mean_notime) == "(n = n())")] <- "Apiary_survey_months"
+
+# Checking data
+#Sum of Apiary_survey_months tally should equal the number of rows as the previous df where 
+#row = a unique apiary*monty*year event
+sum(afb_apiary_mean_notime$"Apiary_survey_months")
+
+
+## Bring back in apiary data for spatial analysis 
+afb_meta= subset(data_afb, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,afb_bin,no_of_cols_with_afb, num_of_colonies_inspected, inspection_year, inspection_month))
+
+head(afb_meta)
+
+afb_merged<-merge(afb_meta,afb_apiary_mean_notime, by="apiary_id")
+head(afb_merged)
+
+#Remove duplicate rows from the data frame to prevent skewing of results from repeats 
+afb_spatial_prev<- afb_merged[!duplicated(afb_merged$apiary_id),]
+
+#Filter out any entries where an apiary is surveyed on less than 10 monthly occations to improve robustness of the data 
+afb_spatial_robustmean<-subset(afb_spatial_prev, Apiary_survey_months >= 10)
+head(afb_spatial_robustmean)
+glimpse(afb_spatial_robustmean)
+
+#Moran's I investigation 
+#Creating neighbours list with k nearest neighbour technique 
+coordinates(afb_spatial_robustmean)<- ~ Long+Lat
+afb_knea<-knearneigh(coordinates(afb_spatial_robustmean), longlat=T)
+afb_neib<-knn2nb(afb_knea)
+afb_list<-nb2listw(afb_neib)
+#Checking neighbours list is in the correct format for insertion into moran.test 
+class(afb_list)
+
+#Moran's I test
+AFB_moran<-moran.test(afb_spatial_robustmean$afb_bin_present,afb_list,alternative = "greater")
+
+#Obtaining the z score for this test (Should be approximately the same as the Standard deviations in the origingal test output.)
+AFB_z_score<-((AFB_moran$estimate["Moran I statistic"]-AFB_moran$estimate["Expectation"])/sqrt(AFB_moran$estimate["Variance"]))
+
+
+print(AFB_z_score)
+
+
+#################################################################################################################################################
+#EFB analysis 
+
+#Import the data 
+data_efb<-read.csv(file.choose())
+
+#Convert EFB data to binary to make the data presence/absence like other diseases being analysed 
+
+data_efb$no_of_cols_with_efb[is.na(data_efb$no_of_cols_with_efb)]<-0
+data_efb$efb_bin<-data_efb$no_of_cols_with_efb
+data_efb$efb_bin<-replace(data_efb$efb_bin, data_efb$efb_bin >1,1)
+
+
+#create a subset of the data
+efb<-subset(data_efb, 
+            select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned, no_of_cols_with_efb))
+
+#remove rows where there are no entries for chalkbrood. 
+efb<-efb[!is.na(efb$efb_bin),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+efb_collapsed <- efb %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+efb_collapsed$efb_bin_present<-efb_collapsed$efb_bin_sum
+efb_collapsed$efb_bin_present<- replace(efb_collapsed$efb_bin_present, efb_collapsed$efb_bin_present >1,1)
+
+
+#Collation of apiary data irrespective of time 
+efb_apiary_mean_notime <-efb_collapsed %>% 
+  group_by(apiary_id) %>% 
+  summarise(efb_bin_present = mean(efb_bin_present),(n = n()))
+head(efb_apiary_mean_notime)
+
+
+colnames(efb_apiary_mean_notime)[which(names(efb_apiary_mean_notime) == "(n = n())")] <- "Apiary_survey_months"
+
+# Checking data
+#Sum of Apiary_survey_months tally should equal the number of rows as the previous df where 
+#row = a unique apiary*monty*year event
+sum(efb_apiary_mean_notime$"Apiary_survey_months")
+
+
+
+## Bring back in apiary 
+efb_meta= subset(data_efb, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,efb_bin,no_of_cols_with_efb, num_of_colonies_inspected, inspection_year, inspection_month))
+
+head(efb_meta)
+
+efb_merged<-merge(efb_meta,efb_apiary_mean_notime, by="apiary_id")
+head(efb_merged)
+
+#Remove duplicate rows from the data frame
+efb_spatial_prev<- efb_merged[!duplicated(efb_merged$apiary_id),]
+
+#Filter out any entries where an apiary is surveyed on less than 10 monthly occations to improve robustness of the data 
+efb_spatial_robustmean<-subset(efb_spatial_prev, Apiary_survey_months >= 10)
+head(efb_spatial_robustmean)
+glimpse(efb_spatial_robustmean)
+
+#Moran's I investigation 
+
+#Creating neighbours list with k nearest neighbour technique
+coordinates(efb_spatial_robustmean)<- ~ Long+Lat
+efb_knea<-knearneigh(coordinates(efb_spatial_robustmean), longlat=T)
+efb_neib<-knn2nb(efb_knea)
+efb_list<-nb2listw(efb_neib)
+#Checking neighbours list is in the correct format for insertion into moran.test 
+class(efb_list)
+
+#Moran's I test
+EFB_moran<-moran.test(efb_spatial_robustmean$efb_bin_present,efb_list,alternative = "greater")
+
+
+#Obtaining the z score for this test (Should be approximately the same as the Standard deviations in the origingal test output.)
+EFB_z_score<-((EFB_moran$estimate["Moran I statistic"]-EFB_moran$estimate["Expectation"])/sqrt(EFB_moran$estimate["Variance"]))
+
+
+print(EFB_z_score)
+
+
+
+
+#############################################################################################################################################
+#plotting disease prevalence on a longitudinal and latitudinal scale to visually depict any spatial clustering along both gradients  
+
+#chalkbrood 
+#Long
+chalk_long<-ggplot(cb_spatial_robustmean,mapping = aes(x=Long, y=chalkbrood_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Longitude", y="Chalkbrood prevalence")
+
+#Lat
+chalk_lat<-ggplot(cb_spatial_robustmean,mapping = aes(x=Lat, y=chalkbrood_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+scale_y_continuous(limits=c(0,1.5),expand = expansion(mult = c(0,0.5)))+labs(x="Latitude", y="Chalkbrood prevalence")
+
+
+plot_grid(chalk_long, chalk_lat)
+
+###########################################################################
+#plotting disease prevalence on a longitudinal and latitudinal scale to visually depict any spatial clustering along both gradients  
+
+#sacbrood 
+#Long 
+sb_long<-ggplot(sb_spatial_robustmean, mapping = aes(x=Long, y=sacbrood_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Longitude", y="Sacbrood prevalence")
+
+#Lat 
+sb_lat<-ggplot(sb_spatial_robustmean,mapping = aes(x=Lat, y=sacbrood_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Latitude", y="Sacbrood prevalence")
+
+plot_grid(sb_long, sb_lat)
+
+
+###########################################################################
+#varroosis 
+#plotting disease prevalence on a longitudinal and latitudinal scale to visually depict any spatial clustering along both gradients  
+
+#Long 
+var_long<-ggplot(varo_spatial_robustmean,mapping = aes(x=Long, y=varroosis_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Longitude", y="Varroosis prevalence")
+
+#Lat 
+var_lat<-ggplot(varo_spatial_robustmean,mapping = aes(x=Lat, y=varroosis_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Latitude", y="Varroosis prevalence")
+
+
+plot_grid(var_long, var_lat)
+
+###########################################################################
+#plotting disease prevalence on a longitudinal and latitudinal scale to visually depict any spatial clustering along both gradients  
+
+#AFB 
+#Long 
+AFB_long<-ggplot(afb_spatial_robustmean,mapping = aes(x=Long, y=afb_bin_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Longitude", y="American Foulbrood prevalence")
+
+#Lat 
+AFB_lat<-ggplot(afb_spatial_robustmean,mapping = aes(x=Lat, y=afb_bin_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Latitude", y="American Foulbrood prevalence")
+
+
+plot_grid(AFB_long, AFB_lat)
+
+##########################################################################
+#plotting disease prevalence on a longitudinal and latitudinal scale to visually depict any spatial clustering along both gradients  
+
+#EFB
+#Long 
+EFB_long<-ggplot(efb_spatial_robustmean,mapping = aes(x=Long, y=efb_bin_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Longitude", y="European Foulbrood prevalence")
+
+#Lat 
+EFB_lat<-ggplot(efb_spatial_robustmean,mapping = aes(x=Lat, y=efb_bin_present))+geom_point()+theme_cowplot(12)+coord_cartesian(ylim = c(0,1.5), expand=F)+labs(x="Latitude", y="European Foulbrood prevalence")
+
+plot_grid(EFB_long, EFB_lat)
+
+
+
+#Plotting disease prevalence onto a UK map in relation to UK cities 
+#################################################################################
+
+#Create UK map 
+uk_map <- map_data(map = "world") %>% 
+  filter(region== "UK"& subregion==c("Great Britain", "Wales"))
+
+#Import cities data 
+uk_cities<-st_read(file.choose())
+
+
+
+#Chalkbrood plot 
+cb_spatial<-cb_spatial_robustmean
+#removing any 0 values so that they are not plotted 
+#convert from 0 to NA then drop NA 
+cb_spatial$chalkbrood_present[cb_spatial$chalkbrood_present==0]<-NA
+cb_spatial<-cb_spatial[!is.na(cb_spatial$chalkbrood_present),]
+
+#Plot disease and cities onto UK map 
+chalk_space<-ggplot()+
+  geom_polygon(data=uk_map,aes(x=long,y=lat,group=group),fill="white", colour="black")+
+  geom_point(cb_spatial,mapping = aes(x=Long, y=Lat),size=1, colour="#E69F00")+theme_cowplot(12)+ggtitle("Chalkbrood Spatial Distribution")+geom_point(uk_cities, mapping=aes(x=LONG, y=LAT), size =2, shape=25)
+chalk_space<-chalk_space+coord_map()
+
+plot(chalk_space)
+#####################################
+#Sacbrood plot 
+sb_spatial<-sb_spatial_robustmean
+#removing any 0 values so that they are not plotted 
+#convert from 0 to NA then drop NA 
+sb_spatial$sacbrood_present[sb_spatial$sacbrood_present==0]<-NA
+sb_spatial<-sb_spatial[!is.na(sb_spatial$sacbrood_present),]
+
+#Plot disease and cities onto UK map 
+sb_space<-ggplot()+
+  geom_polygon(data=uk_map,aes(x=long,y=lat,group=group),fill="white", colour="black")+
+  geom_point(sb_spatial,mapping = aes(x=Long, y=Lat),size=1, colour="#009E73")+theme_cowplot(12)+ggtitle("Sacbrood Spatial Distribution")+geom_point(uk_cities, mapping=aes(x=LONG, y=LAT), size =2, shape=25)+coord_map()
+
+
+
+plot(sb_space)
+#####################################
+#varroosis plot
+va_spatial<-varo_spatial_robustmean
+#removing any 0 values so that they are not plotted 
+#convert from 0 to NA then drop NA
+va_spatial$varroosis_present[va_spatial$varroosis_present==0]<-NA
+va_spatial<-va_spatial[!is.na(va_spatial$varroosis_present),]
+
+#Plot disease and cities onto UK map 
+varroosis_space<-ggplot()+
+  geom_polygon(data=uk_map,aes(x=long,y=lat,group=group),fill="white", colour="black")+
+  geom_point(va_spatial,mapping = aes(x=Long, y=Lat),size=1, colour="#F0E442")+theme_cowplot(12)+ggtitle("Varroosis Spatial Distribution")+geom_point(uk_cities, mapping=aes(x=LONG, y=LAT), size =2, shape=25)+coord_map()
+plot(varroosis_space)
+
+#####################################
+#AFB plot 
+afb_spatial<-afb_spatial_robustmean
+#removing any 0 values so that they are not plotted 
+#convert from 0 to NA then drop NA
+afb_spatial$afb_bin_present[afb_spatial$afb_bin_present==0]<-NA
+afb_spatial<-afb_spatial[!is.na(afb_spatial$afb_bin_present),]
+
+#Plot disease and cities onto UK map 
+afb_space<-ggplot()+
+  geom_polygon(data=uk_map,aes(x=long,y=lat,group=group),fill="white", colour="black")+
+  geom_point(afb_spatial,mapping = aes(x=Long, y=Lat),size=1, colour="#CC79A7")+theme_cowplot(12)+ggtitle("American Foulbrood Spatial Distribution")+geom_point(uk_cities, mapping=aes(x=LONG, y=LAT), size =2, shape=25)+coord_map()
+plot(afb_space)
+
+#####################################
+#EFB plot 
+
+efb_spatial<-efb_spatial_robustmean
+#removing any 0 values so that they are not plotted 
+#convert from 0 to NA then drop NA
+efb_spatial$efb_bin_present[efb_spatial$efb_bin_present==0]<-NA
+efb_spatial<-efb_spatial[!is.na(efb_spatial$efb_bin_present),]
+
+#Plot disease and cities onto UK map 
+efb_space<-ggplot()+
+  geom_polygon(data=uk_map,aes(x=long,y=lat,group=group),fill="white", colour="black")+
+  geom_point(efb_spatial,mapping = aes(x=Long, y=Lat),size=1, colour="#0072B2")+theme_cowplot(12)+ggtitle("European Foulbrood Spatial Distribution")+geom_point(uk_cities, mapping=aes(x=LONG, y=LAT), size =2, shape=25)+coord_map()
+
+
+plot(efb_space)
