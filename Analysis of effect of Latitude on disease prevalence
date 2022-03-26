@@ -1,0 +1,601 @@
+library(tidyverse)
+library(ggplot2)
+library(viridis)
+library(stats)
+library(cowplot)
+
+######################################################################################################
+#Chalkbrood
+
+#Import the data 
+data_chalkbrood<-read.csv(file.choose())
+
+#create a subset of the data
+cb<-subset(data_chalkbrood, 
+           select= -c(month_abr,cluster,Long, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for chalkbrood. 
+cb<-cb[!is.na(cb$chalkbrood),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+cb_collapsed_spatial <- cb %>%
+  group_by(apiary_id,inspection_year, inspection_month, Lat) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+cb_collapsed_spatial$chalkbrood_present<-cb_collapsed_spatial$chalkbrood_sum
+cb_collapsed_spatial$chalkbrood_present<- replace(cb_collapsed_spatial$chalkbrood_present, cb_collapsed_spatial$chalkbrood_present >1,1)
+
+chalkbrood_early<-subset(cb_collapsed_spatial, inspection_year %in% c(2006:2010))
+chalkbrood_early<-chalkbrood_early[c(1,2,4,7)]
+chalkbrood_early$year_group<-c("Early")
+
+chalkbrood_mid<-subset(cb_collapsed_spatial, inspection_year %in% c(2011:2015))
+chalkbrood_mid<-chalkbrood_mid[c(1,2,4,7)]
+chalkbrood_mid$year_group<-c("Mid")
+
+
+chalkbrood_late<-subset(cb_collapsed_spatial, inspection_year %in% c(2016:2019))
+chalkbrood_late<-chalkbrood_late[c(1,2,4,7)]
+chalkbrood_late$year_group<-c("Late")
+
+###
+#glm to assess effect of latitude on chalkbrood prevalence 
+cb_early_spatial<-glm(chalkbrood_present~Lat, family=binomial(), data=chalkbrood_early)
+summary(cb_early_spatial)
+plot(cb_early_spatial)
+
+
+cb_mid_spatial<-glm(chalkbrood_present~Lat, family=binomial(), data=chalkbrood_mid)
+summary(cb_mid_spatial)
+
+cb_late_spatial<-glm(chalkbrood_present~Lat, family=binomial(), data=chalkbrood_late)
+summary(cb_late_spatial)
+
+
+
+#####################################################
+#creating data for latitude plotting. 
+
+
+#create a subset of the data
+cb_lat<-subset(data_chalkbrood, 
+               select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for chalkbrood. 
+cb_lat<-cb_lat[!is.na(cb_lat$chalkbrood),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+cb_collapsed_test <- cb_lat %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+cb_collapsed_test$chalkbrood_present<-cb_collapsed_test$chalkbrood_sum
+cb_collapsed_test$chalkbrood_present<- replace(cb_collapsed_test$chalkbrood_present, cb_collapsed_test$chalkbrood_present >1,1)
+
+#Collation of apiary data irrespective of time
+cb_apiary_mean_time_test <-cb_collapsed_test %>% 
+  group_by(apiary_id, inspection_year) %>% 
+  summarise(chalkbrood_present = mean(chalkbrood_present),(n = n()))
+head(cb_apiary_mean_time_test)
+
+
+colnames(cb_apiary_mean_time_test)[which(names(cb_apiary_mean_time_test) == "(n = n())")] <- "Apiary_survey_months"
+
+## bring back in Latitude data
+
+cb_meta= subset(data_chalkbrood, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,chalkbrood, num_of_colonies_inspected, inspection_year, inspection_month))
+cb_meta_2<- cb_meta %>%distinct(apiary_id, .keep_all=T)
+
+head(cb_meta)
+
+cb_merged<-merge(cb_meta_2,cb_apiary_mean_time_test, by="apiary_id")
+
+cb_merged<-left_join(cb_apiary_mean_time_test, cb_meta, by="apiary_id")
+head(cb_merged)
+
+#Remove duplicate rows from the data frame to prevent skewing of results from repeats 
+
+#Filter out any entries where an individual apiary is surveyed on less than 10 monthly occations to improve robsutness of dataset 
+
+cb_spatial_robustmean<-subset(cb_merged, Apiary_survey_months >=4)
+head(cb_spatial_robustmean)
+glimpse(cb_spatial_robustmean)
+
+cb_year_group <- cb_spatial_robustmean %>%
+  mutate(year_group=if_else(as.numeric(inspection_year)<=2010, "Early",
+                            if_else(between(as.numeric(inspection_year), 2010,2015)==TRUE, "Mid",
+                                    if_else(between(as.numeric(inspection_year), 2016,2019)==TRUE,"Late", "NA"))))
+
+
+#make year a factor for plotting 
+cb_year_group$year_group<-factor(cb_year_group$year_group, levels= c("Early", "Mid", "Late"))
+
+
+#plot chalkbrood prevalence with relation to changing latitude
+cb_lat<-ggplot(cb_year_group, aes(x=Lat, y=chalkbrood_present,group=year_group, color=year_group))+
+  labs(x="Inspection month", y="Chalkbrood_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Chalkbrood distribution")+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+plot(cb_lat)
+
+
+######################################################################################################
+#sacbrood
+
+#Import the data 
+data_sacbrood<-read.csv(file.choose())
+
+#create a subset of the data
+sb<-subset(data_sacbrood, 
+           select= -c(month_abr,cluster,Long, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for chalkbrood. 
+sb<-sb[!is.na(sb$sacbrood),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+sb_collapsed_spatial <- sb %>%
+  group_by(apiary_id,inspection_year, inspection_month, Lat) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+sb_collapsed_spatial$sacbrood_present<-sb_collapsed_spatial$sacbrood_sum
+sb_collapsed_spatial$sacbrood_present<- replace(sb_collapsed_spatial$sacbrood_present, sb_collapsed_spatial$sacbrood_present >1,1)
+
+sacbrood_early<-subset(sb_collapsed_spatial, inspection_year %in% c(2006:2010))
+sacbrood_early<-sacbrood_early[c(1,2,4,7)]
+sacbrood_early$year_group<-c("Early")
+
+sacbrood_mid<-subset(sb_collapsed_spatial, inspection_year %in% c(2011:2015))
+sacbrood_mid<-sacbrood_mid[c(1,2,4,7)]
+sacbrood_mid$year_group<-c("Mid")
+
+sacbrood_late<-subset(sb_collapsed_spatial, inspection_year %in% c(2016:2019))
+sacbrood_late<-sacbrood_late[c(1,2,4,7)]
+sacbrood_late$year_group<-c("Late")
+
+#glm to assess effect of latitude on sacbrood prevalence 
+sb_early_spatial<-glm(sacbrood_present~Lat, family=binomial(), data=sacbrood_early)
+summary(sb_early_spatial)
+
+sb_mid_spatial<-glm(sacbrood_present~Lat, family=binomial(), data=sacbrood_mid)
+summary(sb_mid_spatial)
+
+sb_late_spatial<-glm(sacbrood_present~Lat, family=binomial(), data=sacbrood_late)
+summary(sb_late_spatial)
+
+
+#####################################################
+#creating data for latitude plotting.
+
+#create a subset of the data
+sb_lat<-subset(data_sacbrood, 
+               select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for sacbrood. 
+sb_lat<-sb_lat[!is.na(sb_lat$sacbrood),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+sb_collapsed_test <- sb_lat %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+sb_collapsed_test$sacbrood_present<-sb_collapsed_test$sacbrood_sum
+sb_collapsed_test$sacbrood_present<- replace(sb_collapsed_test$sacbrood_present, sb_collapsed_test$sacbrood_present >1,1)
+
+#Collation of apiary data irrespective of time
+sb_apiary_mean_time_test <-sb_collapsed_test %>% 
+  group_by(apiary_id, inspection_year) %>% 
+  summarise(sacbrood_present = mean(sacbrood_present),(n = n()))
+head(sb_apiary_mean_time_test)
+
+
+colnames(sb_apiary_mean_time_test)[which(names(sb_apiary_mean_time_test) == "(n = n())")] <- "Apiary_survey_months"
+
+
+## bring back in Latitude data
+sb_meta= subset(data_sacbrood, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,sacbrood, num_of_colonies_inspected, inspection_year, inspection_month))
+sb_meta_2<- sb_meta %>%distinct(apiary_id, .keep_all=T)
+
+head(sb_meta)
+
+sb_merged<-merge(sb_meta_2,sb_apiary_mean_time_test, by="apiary_id")
+
+#sb_merged<-left_join(sb_apiary_mean_time_test, sb_meta, by="apiary_id")
+head(sb_merged)
+
+
+#Filter out any entries where an individual apiary is surveyed on less than 10 monthly occations to improve robsutness of dataset 
+sb_spatial_robustmean<-subset(sb_merged, Apiary_survey_months >=4)
+head(sb_spatial_robustmean)
+glimpse(sb_spatial_robustmean)
+
+sb_year_group <- sb_spatial_robustmean %>%
+  mutate(year_group=if_else(as.numeric(inspection_year)<=2010, "Early",
+                            if_else(between(as.numeric(inspection_year), 2010,2015)==TRUE, "Mid",
+                                    if_else(between(as.numeric(inspection_year), 2016,2019)==TRUE,"Late", "NA"))))
+
+
+#make year a factor for plotting 
+sb_year_group$year_group<-factor(sb_year_group$year_group, levels= c("Early", "Mid", "Late"))
+
+
+sb_lat<-ggplot(sb_year_group, aes(x=Lat, y=sacbrood_present, color=year_group))+
+  labs(x="Inspection month", y="sacbrood_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Sacbrood distribution")+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+plot(sb_lat)
+
+######################################################################################################
+#Varroosis 
+
+#import the data 
+data_varroosis<-read.csv(file.choose())
+
+#create a subset of the data
+varo<-subset(data_varroosis, 
+             select= -c(month_abr,cluster,Long, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for chalkbrood. 
+varo<-varo[!is.na(varo$varroosis),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+varo_collapsed_spatial <- varo %>%
+  group_by(apiary_id,inspection_year, inspection_month, Lat) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+varo_collapsed_spatial$varroosis_present<-varo_collapsed_spatial$varroosis_sum
+varo_collapsed_spatial$varroosis_present<- replace(varo_collapsed_spatial$varroosis_present, varo_collapsed_spatial$varroosis_present >1,1)
+
+varo_early<-subset(varo_collapsed_spatial, inspection_year %in% c(2006:2010))
+varo_early<-varo_early[c(1,2,4,7)]
+varo_early$year_group<-c("Early")
+
+varo_mid<-subset(varo_collapsed_spatial, inspection_year %in% c(2011:2015))
+varo_mid<-varo_mid[c(1,2,4,7)]
+varo_mid$year_group<-c("Mid")
+
+varo_late<-subset(varo_collapsed_spatial, inspection_year %in% c(2016:2019))
+varo_late<-varo_late[c(1,2,4,7)]
+varo_late$year_group<-c("Late")
+
+###GLM to assess the impact of latitude on varroosis 
+
+varo_early_spatial<-glm(varroosis_present~Lat, family=binomial(), data=varroosis_early)
+summary(varo_early_spatial)
+
+varo_mid_spatial<-glm(varroosis_present~Lat, family=binomial(), data=varroosis_mid)
+summary(varo_mid_spatial)
+
+varo_late_spatial<-glm(varroosis_present~Lat, family=binomial(), data=varroosis_late)
+summary(varo_late_spatial)
+
+
+#####################################################
+#getting data for varroosis latitude plots 
+
+#create a subset of the data
+varo_lat<-subset(data_varroosis, 
+                 select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for varroosis. 
+varo_lat<-varo_lat[!is.na(varo_lat$varroosis),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+varo_collapsed_test <- varo_lat %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+varo_collapsed_test$varroosis_present<-varo_collapsed_test$varroosis_sum
+varo_collapsed_test$varroosis_present<- replace(varo_collapsed_test$varroosis_present, varo_collapsed_test$varroosis_present >1,1)
+
+#Collation of apiary data irrespective of time
+varo_apiary_mean_time_test <-varo_collapsed_test %>% 
+  group_by(apiary_id, inspection_year) %>% 
+  summarise(varroosis_present = mean(varroosis_present),(n = n()))
+head(varo_apiary_mean_time_test)
+
+
+colnames(varo_apiary_mean_time_test)[which(names(varo_apiary_mean_time_test) == "(n = n())")] <- "Apiary_survey_months"
+## bring back in Latitude data
+varo_meta= subset(data_varroosis, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,varroosis, num_of_colonies_inspected, inspection_year, inspection_month))
+varo_meta_2<- varo_meta %>%distinct(apiary_id, .keep_all=T)
+
+head(varo_meta)
+
+varo_merged<-merge(varo_meta_2,varo_apiary_mean_time_test, by="apiary_id")
+head(varo_merged)
+
+#Remove duplicate rows from the data frame to prevent skewing of results from repeats 
+
+#Filter out any entries where an individual apiary is surveyed on less than 10 monthly occations to improve robsutness of dataset 
+varo_spatial_robustmean<-subset(varo_merged, Apiary_survey_months >=4)
+head(varo_spatial_robustmean)
+glimpse(varo_spatial_robustmean)
+
+varo_year_group <- varo_spatial_robustmean %>%
+  mutate(year_group=if_else(as.numeric(inspection_year)<=2010, "Early",
+                            if_else(between(as.numeric(inspection_year), 2010,2015)==TRUE, "Mid",
+                                    if_else(between(as.numeric(inspection_year), 2016,2019)==TRUE,"Late", "NA"))))
+#make year a factor for plotting 
+varo_year_group$year_group<-factor(varo_year_group$year_group, levels= c("Early", "Mid", "Late"))
+
+
+varo_lat<-ggplot(varo_year_group, aes(x=Lat, y=varroosis_present, color=year_group))+
+  labs(x="Inspection month", y="varroosis_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Varroosis distribution")+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+plot(varo_lat)
+
+######################################################################################################
+#AFB
+
+#Import the data 
+data_afb<-read.csv(file.choose())
+
+#Convert AFB data into binary to make it presence/absesnce like other diseases analysed
+data_afb$no_of_cols_with_afb[is.na(data_afb$no_of_cols_with_afb)]<-0
+data_afb$afb_bin<-data_afb$no_of_cols_with_afb
+data_afb$afb_bin<-replace(data_afb$afb_bin, data_afb$afb_bin >1,1)
+#create a subset of the data
+
+afb<-subset(data_afb, 
+            select= -c(month_abr,cluster,Long, county_code,colonies_in_apiary, colonies_owned, no_of_cols_with_afb))
+
+#remove rows where there are no entries for chalkbrood. 
+afb<-afb[!is.na(afb$afb_bin),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+afb_collapsed_spatial <- afb %>%
+  group_by(apiary_id,inspection_year, inspection_month, Lat) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+afb_collapsed_spatial$afb_bin_present<-afb_collapsed_spatial$afb_bin_sum
+afb_collapsed_spatial$afb_bin_present<- replace(afb_collapsed_spatial$afb_bin_present, afb_collapsed_spatial$afb_bin_present >1,1)
+
+afb_early<-subset(afb_collapsed_spatial, inspection_year %in% c(2006:2010))
+afb_early<-afb_early[c(1,2,4,7)]
+afb_early$year_group<-c("Early")
+
+afb_mid<-subset(afb_collapsed_spatial, inspection_year %in% c(2011:2015))
+afb_mid<-afb_mid[c(1,2,4,7)]
+afb_mid$year_group<-c("Mid")
+
+afb_late<-subset(afb_collapsed_spatial, inspection_year %in% c(2016:2019))
+afb_late<-afb_late[c(1,2,4,7)]
+afb_late$year_group<-c("Late")
+
+###########
+#GLM
+afb_early_spatial<-glm(afb_bin_present~Lat, family=binomial(), data=afb_early)
+summary(afb_early_spatial)
+
+afb_mid_spatial<-glm(afb_bin_present~Lat, family=binomial(), data=afb_mid)
+summary(afb_mid_spatial)
+
+afb_late_spatial<-glm(afb_bin_present~Lat, family=binomial(), data=afb_late)
+summary(afb_late_spatial)
+
+
+
+#####################################################
+
+#create a subset of the data
+afb_lat<-subset(data_afb, 
+                select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for afb. 
+afb_lat<-afb_lat[!is.na(afb_lat$afb),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+afb_collapsed_lat <- afb_lat %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+afb_collapsed_lat$afb_present<-afb_collapsed_lat$afb_bin_sum
+afb_collapsed_lat$afb_present<- replace(afb_collapsed_lat$afb_present, afb_collapsed_lat$afb_present >1,1)
+
+#Collation of apiary data irrespective of time
+afb_apiary_mean_time_lat <-afb_collapsed_lat %>% 
+  group_by(apiary_id, inspection_year) %>% 
+  summarise(afb_present = mean(afb_present),(n = n()))
+head(afb_apiary_mean_time_lat)
+
+
+colnames(afb_apiary_mean_time_lat)[which(names(afb_apiary_mean_time_lat) == "(n = n())")] <- "Apiary_survey_months"
+
+## bring back in Latitude data
+afb_meta<-subset(data_afb, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,no_of_cols_with_afb, num_of_colonies_inspected, inspection_year, inspection_month))
+afb_meta_2<- afb_meta %>%distinct(apiary_id, .keep_all=T)
+
+head(afb_meta)
+
+afb_merged<-merge(afb_meta_2,afb_apiary_mean_time_lat, by="apiary_id")
+
+
+head(afb_merged)
+
+
+#Filter out any entries where an individual apiary is surveyed on less than 10 monthly occations to improve robsutness of dataset 
+afb_spatial_robustmean<-subset(afb_merged, Apiary_survey_months >=4)
+head(afb_spatial_robustmean)
+glimpse(afb_spatial_robustmean)
+
+afb_year_group <- afb_spatial_robustmean %>%
+  mutate(year_group=if_else(as.numeric(inspection_year)<=2010, "Early",
+                            if_else(between(as.numeric(inspection_year), 2010,2015)==TRUE, "Mid",
+                                    if_else(between(as.numeric(inspection_year), 2016,2019)==TRUE,"Late", "NA"))))
+
+#make year a factor for plotting 
+afb_year_group$year_group<-factor(afb_year_group$year_group, levels= c("Early", "Mid", "Late"))
+
+
+afb_lat<-ggplot(afb_year_group, aes(x=Lat, y=afb_present, color=year_group))+
+  labs(x="Inspection month", y="afb_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("AFB distribution")+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+plot(afb_lat)
+
+######################################################################################################
+#EFB
+
+#Import the data 
+data_efb<-read.csv(file.choose())
+
+#Convert AFB data into binary to make it presence/absesnce like other diseases analysed
+data_efb$no_of_cols_with_efb[is.na(data_efb$no_of_cols_with_efb)]<-0
+data_efb$efb_bin<-data_efb$no_of_cols_with_efb
+data_efb$efb_bin<-replace(data_efb$efb_bin, data_efb$efb_bin >1,1)
+#create a subset of the data
+
+efb<-subset(data_efb, 
+            select= -c(month_abr,cluster,Long, county_code,colonies_in_apiary, colonies_owned, no_of_cols_with_efb))
+
+#remove rows where there are no entries for chalkbrood. 
+efb<-efb[!is.na(efb$efb_bin),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+efb_collapsed_spatial <- efb %>%
+  group_by(apiary_id,inspection_year, inspection_month, Lat) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+efb_collapsed_spatial$efb_bin_present<-efb_collapsed_spatial$efb_bin_sum
+efb_collapsed_spatial$efb_bin_present<- replace(efb_collapsed_spatial$efb_bin_present, efb_collapsed_spatial$efb_bin_present >1,1)
+
+efb_early<-subset(efb_collapsed_spatial, inspection_year %in% c(2006:2010))
+efb_early<-efb_early[c(1,2,4,7)]
+efb_early$year_group<-c("Early")
+
+efb_mid<-subset(efb_collapsed_spatial, inspection_year %in% c(2011:2015))
+efb_mid<-efb_mid[c(1,2,4,7)]
+efb_mid$year_group<-c("Mid")
+
+efb_late<-subset(efb_collapsed_spatial, inspection_year %in% c(2016:2019))
+efb_late<-efb_late[c(1,2,4,7)]
+efb_late$year_group<-c("Late")
+
+#############################glm 
+
+efb_early_spatial<-glm(efb_bin_present~Lat, family=binomial(), data=efb_early)
+summary(efb_early_spatial)
+
+efb_mid_spatial<-glm(efb_bin_present~Lat, family=binomial(), data=efb_mid)
+summary(efb_mid_spatial)
+
+efb_late_spatial<-glm(efb_bin_present~Lat, family=binomial(), data=efb_late)
+summary(efb_late_spatial)
+
+####################################################################################################
+#creating data for latitude plotting.
+
+
+#create a subset of the data
+efb_lat<-subset(data_efb, 
+                select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
+
+#remove rows where there are no entries for efb. 
+efb_lat<-efb_lat[!is.na(efb_lat$efb),]
+
+#collapse data with the same apirary_id, inspection_month and inspection_year 
+#this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
+
+efb_collapsed_lat <- efb_lat %>%
+  group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
+
+#continue looking at the data as binary 
+#duplicate it to we then transform the duplicate 
+efb_collapsed_lat$efb_present<-efb_collapsed_lat$efb_bin_sum
+efb_collapsed_lat$efb_present<- replace(efb_collapsed_lat$efb_present, efb_collapsed_lat$efb_present >1,1)
+
+#Collation of apiary data irrespective of time
+efb_apiary_mean_time_lat <-efb_collapsed_lat %>% 
+  group_by(apiary_id, inspection_year) %>% 
+  summarise(efb_present = mean(efb_present),(n = n()))
+head(efb_apiary_mean_time_lat)
+
+
+
+colnames(efb_apiary_mean_time_lat)[which(names(efb_apiary_mean_time_lat) == "(n = n())")] <- "Apiary_survey_months"
+
+## bring back in Latitude data
+efb_meta<-subset(data_efb, select = -c(month_abr, cluster, county_code,colonies_in_apiary,colonies_owned,no_of_cols_with_efb, num_of_colonies_inspected, inspection_year, inspection_month))
+efb_meta_2<- efb_meta %>%distinct(apiary_id, .keep_all=T)
+
+head(efb_meta)
+
+efb_merged<-merge(efb_meta_2,efb_apiary_mean_time_lat, by="apiary_id")
+
+
+#Filter out any entries where an individual apiary is surveyed on less than 10 monthly occations to improve robsutness of dataset 
+efb_spatial_robustmean<-subset(efb_merged, Apiary_survey_months >=4)
+head(efb_spatial_robustmean)
+glimpse(efb_spatial_robustmean)
+
+efb_year_group <- efb_spatial_robustmean %>%
+  mutate(year_group=if_else(as.numeric(inspection_year)<=2010, "Early",
+                            if_else(between(as.numeric(inspection_year), 2010,2015)==TRUE, "Mid",
+                                    if_else(between(as.numeric(inspection_year), 2016,2019)==TRUE,"Late", "NA"))))
+
+#make year a factor for plotting 
+efb_year_group$year_group<-factor(efb_year_group$year_group, levels= c("Early", "Mid", "Late"))
+
+efb_lat<-ggplot(efb_year_group, aes(x=Lat, y=efb_present, color=year_group))+
+  labs(x="Inspection month", y="efb_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("EFB distribution")+scale_colour_viridis(
+    alpha = 1,
+    begin = 0,
+    end = 1,
+    direction = 1,
+    discrete = T,
+    option = "D"
+  )
+
+plot(efb_lat)
