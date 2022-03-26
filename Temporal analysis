@@ -1,15 +1,12 @@
-
-#Loading required packages 
+#loading the required packages 
 
 library(dplyr)
 library(tidyverse)
+library(ggplot2)
 library(cowplot)
 library(viridis)
 library(stats)
 
-
-######################################################################
-#Chalkbrood analysis 
 
 #Import the data 
 data_chalkbrood<-read.csv(file.choose())
@@ -37,6 +34,10 @@ cb_collapsed$chalkbrood_present<- replace(cb_collapsed$chalkbrood_present, cb_co
 cb_apiary_mean<-cb_collapsed %>% 
   group_by(inspection_year,inspection_month) %>% 
   summarise(chalkbrood_present=mean(chalkbrood_present))
+
+
+#scale variables for comparability 
+cb_collapsed[c(2,3)]<- scale(cb_collapsed[c(2,3)])
 
 #Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
 cb_model<-glm(chalkbrood_present~inspection_year*inspection_month, family=binomial(), data=cb_collapsed)
@@ -78,7 +79,7 @@ cb_apiary_robustmean$inspection_year<-as.factor(cb_apiary_robustmean$inspection_
 
 #Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
 cb_lines<-ggplot(cb_apiary_robustmean, aes(x=inspection_month, y=chalkbrood_present, color=inspection_year, group=inspection_year))+
-  labs(x="Inspection month", y="Chalkbrood prevalence")+geom_line(aes(color=inspection_year))+theme_cowplot(12)+scale_colour_viridis(
+  labs(x="Inspection month", y="Chalkbrood prevalence")+geom_line(aes(color=inspection_year))+theme_cowplot(12)+ggtitle("Chalkbrood prevalence")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -92,17 +93,17 @@ plot(cb_lines)
 
 #repeat the above for all diseases 
 #######################################################################################################################################
-#Sacbrood analysis 
+#Sacbrood 
+#read in the data 
 
 
-#Import the data 
 data_sacbrood<-read.csv(file.choose())
 
 #create a subset of the data
 sb<-subset(data_sacbrood, 
            select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
 
-#remove rows where there are no entries for sacbrood. 
+#remove rows where there are no entries for chalkbrood. 
 sb<-sb[!is.na(sb$sacbrood),]
 
 #collapse data with the same apirary_id, inspection_month and inspection_year 
@@ -114,16 +115,20 @@ sb_collapsed <- sb %>%
 #continue looking at the data as binary 
 #duplicate it to we then transform the duplicate 
 sb_collapsed$sacbrood_present<-sb_collapsed$sacbrood_sum
-sb_collapsed$sacbrood_present<- replace(sb_collapsed$sacbrood_present, sb_collapsed$sacbrood_present >1,1)
+sb_collapsed$sacbrood_present<- replace(sb_collapsed$sacbrood_sum, sb_collapsed$sacbrood_sum >1,1)
 
-#get the means for temporal analysis 
+view(sb_collapsed)
+#get the means for temporal analysis
 
 sb_apiary_mean<-sb_collapsed %>% 
   group_by(inspection_year,inspection_month) %>% 
   summarise(sacbrood_present=mean(sacbrood_present))
 
+#scale 
+sb_collapsed[c(2,3)]<- scale(sb_collapsed[c(2,3)])
+
 #Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
-sb_model<-glm(sacbrood_present~inspection_year*inspection_month,family=binomial(), data=sb_collapsed)
+sb_model<-glm(sacbrood_present~inspection_year*inspection_month, family=binomial(), data=sb_collapsed)
 
 plot(sb_model)
 summary(sb_model)
@@ -137,8 +142,8 @@ sb_collapsed2 <- sb %>%
 
 #continue looking at the data as binary 
 #duplicate it to we then transform the duplicate 
-sb_collapsed2$sacbrood_present<-sb_collapsed2$sacbrood_sum
-sb_collapsed$sacbrood_present<- replace(sb_collapsed2$sacbrood_present, sb_collapsed2$sacbrood_present >1,1)
+sb_collapsed2$sacbrood_present<-sb_collapsed$sacbrood_sum
+sb_collapsed2$sacbrood_present<- replace(sb_collapsed2$sacbrood_present, sb_collapsed2$sacbrood_present >1,1)
 
 #get the means for plotting 
 
@@ -146,9 +151,10 @@ sb_apiary_mean2<-sb_collapsed2 %>%
   group_by(inspection_year,inspection_month) %>% 
   summarise(sacbrood_present=mean(sacbrood_present),(n=n()))
 
+#Changing titles 
 colnames(sb_apiary_mean2)[which(names(sb_apiary_mean2) == "(n = n())")] <- "TotalApiaries"
 
-
+#Filtering data
 sb_apiary_robustmean<-subset(sb_apiary_mean2, TotalApiaries >= 10)
 head(sb_apiary_robustmean)
 
@@ -161,7 +167,7 @@ sb_apiary_robustmean$inspection_year<-as.factor(sb_apiary_robustmean$inspection_
 
 #Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
 sb_lines<-ggplot(sb_apiary_robustmean, aes(x=inspection_month, y=sacbrood_present, color=inspection_year, group=inspection_year))+
-  labs(x="Inspection month", y="Sacbrood prevalence")+geom_line()+theme_cowplot(12)+scale_colour_viridis(
+  labs(x="Inspection month", y="sacbroodprevalence")+geom_line(aes(color=inspection_year))+theme_cowplot(12)+ggtitle("Sacbrood prevalence")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -170,47 +176,50 @@ sb_lines<-ggplot(sb_apiary_robustmean, aes(x=inspection_month, y=sacbrood_presen
     option = "D"
   )
 
-
 plot(sb_lines)
 
 
 
 
 ####################################################################
-#Varoosis analysis 
+#Varoosis
 
-#Import the data 
 data_varroosis<-read.csv(file.choose())
 
 #create a subset of the data
 varo<-subset(data_varroosis, 
              select= -c(month_abr,cluster,Long,Lat, county_code,colonies_in_apiary, colonies_owned))
 
-#remove rows where there are no entries for varroosis. 
+#remove rows where there are no entries for chalkbrood. 
 varo<-varo[!is.na(varo$varroosis),]
 
 #collapse data with the same apirary_id, inspection_month and inspection_year 
 #this is to remove instances where we see multiple apirary visits over the same month- artifically drives up results owing to increased sampling. 
 
-varo_collapsed2 <- varo %>%
+varo_collapsed <- varo %>%
   group_by(apiary_id,inspection_year, inspection_month) %>% summarise_all(tibble::lst(sum))
 
 #continue looking at the data as binary 
 #duplicate it to we then transform the duplicate 
-varo_collapsed2$varroosis_present<-varo_collapsed2$varroosis_sum
-varo_collapsed2$varroosis_present<- replace(varo_collapsed2$varroosis_present, varo_collapsed$varroosis_present >1,1)
+varo_collapsed$varroosis_present<-varo_collapsed$varroosis_sum
+varo_collapsed$varroosis_present<- replace(varo_collapsed$varroosis_sum, varo_collapsed$varroosis_sum >1,1)
 
-#get the means for temporal analysis 
+view(varo_collapsed)
+#get the means for temporal analysis
 
-varo_apiary_mean2<-varo_collapsed2 %>% 
+varo_apiary_mean<-varo_collapsed %>% 
   group_by(inspection_year,inspection_month) %>% 
   summarise(varroosis_present=mean(varroosis_present))
 
-#Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
-Varo_model<-glm(varroosis_present~inspection_year*inspection_month,family=binomial(), data=varo_collapsed)
+#scale 
+varo_collapsed[c(2,3)]<- scale(varo_collapsed[c(2,3)])
 
-plot(Varo_model)
-summary(Varo_model)
+#Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
+varo_model<-glm(varroosis_present~inspection_year*inspection_month, family=binomial(), data=varo_collapsed)
+
+
+plot(varo_model)
+summary(varo_model)
 
 
 #For plots records where less than 10 apiaries were removed to remove skews from plots 
@@ -221,8 +230,8 @@ varo_collapsed2 <- varo %>%
 
 #continue looking at the data as binary 
 #duplicate it to we then transform the duplicate 
-varo_collapsed2$varroosis_present<-varo_collapsed2$varroosis_sum
-varo_collapsed$varoosis_present<- replace(varo_collapsed2$varroosis_present, varo_collapsed2$varroosis_present >1,1)
+varo_collapsed2$varroosis_present<-varo_collapsed$varroosis_sum
+varo_collapsed2$varroosis_present<- replace(varo_collapsed2$varroosis_present, varo_collapsed2$varroosis_present >1,1)
 
 #get the means for plotting 
 
@@ -230,9 +239,10 @@ varo_apiary_mean2<-varo_collapsed2 %>%
   group_by(inspection_year,inspection_month) %>% 
   summarise(varroosis_present=mean(varroosis_present),(n=n()))
 
+#Changing titles 
 colnames(varo_apiary_mean2)[which(names(varo_apiary_mean2) == "(n = n())")] <- "TotalApiaries"
 
-
+#Filtering data
 varo_apiary_robustmean<-subset(varo_apiary_mean2, TotalApiaries >= 10)
 head(varo_apiary_robustmean)
 
@@ -240,12 +250,12 @@ head(varo_apiary_robustmean)
 varo_apiary_robustmean$inspection_month<-month.abb[varo_apiary_robustmean$inspection_month]
 varo_apiary_robustmean$inspection_month=factor(varo_apiary_robustmean$inspection_month, levels=month.abb)
 
-#Making year a factor for plotting 
+#Making year a factor for plotting
 varo_apiary_robustmean$inspection_year<-as.factor(varo_apiary_robustmean$inspection_year)
 
 #Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
 varo_lines<-ggplot(varo_apiary_robustmean, aes(x=inspection_month, y=varroosis_present, color=inspection_year, group=inspection_year))+
-  labs(x="Inspection month", y="Varroosis prevalence")+geom_line()+theme_cowplot(12)+scale_colour_viridis(
+  labs(x="Inspection month", y="Varroosis prevalence")+geom_line(aes(color=inspection_year))+theme_cowplot(12)+ggtitle("Varroosis prevalence")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -257,13 +267,10 @@ varo_lines<-ggplot(varo_apiary_robustmean, aes(x=inspection_month, y=varroosis_p
 plot(varo_lines)
 
 ####################################################################
-#AFB analysis 
+#AFB
 
-#Import the data 
+
 data_afb<-read.csv(file.choose())
-
-#Make the data binary for AFB to conver it to presence/absence data like the other diseases being analysed 
-
 data_afb$no_of_cols_with_afb[is.na(data_afb$no_of_cols_with_afb)]<-0
 data_afb$afb_bin<-data_afb$no_of_cols_with_afb
 data_afb$afb_bin<-replace(data_afb$afb_bin, data_afb$afb_bin >1,1)
@@ -292,6 +299,9 @@ afb_collapsed$afb_bin_present<- replace(afb_collapsed$afb_bin_present, afb_colla
 afb_apiary_mean<-afb_collapsed %>% 
   group_by(inspection_year,inspection_month) %>% 
   summarise(afb_bin_present=mean(afb_bin_present))
+
+#scale 
+afb_collapsed[c(2,3)]<- scale(afb_collapsed[c(2,3)])
 
 
 #Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
@@ -333,7 +343,7 @@ afb_apiary_robustmean$inspection_year<-as.factor(afb_apiary_robustmean$inspectio
 
 #Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
 afb_lines<-ggplot(afb_apiary_robustmean, aes(x=inspection_month, y=afb_bin_present, color=inspection_year, group=inspection_year))+
-  labs(x="Inspection month", y="AFB prevalence")+geom_line()+theme_cowplot(12)+scale_colour_viridis(
+  labs(x="Inspection month", y="AFB prevalence")+geom_line()+theme_cowplot(12)+ggtitle("AFB prevalence")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -345,13 +355,9 @@ afb_lines<-ggplot(afb_apiary_robustmean, aes(x=inspection_month, y=afb_bin_prese
 plot(afb_lines)
 
 ####################################################################
-#EFB analysis
+#EFB 
 
-#Import the data 
 data_efb<-read.csv(file.choose())
-
-#Make the data binary for EFB to conver it to presence/absence data like the other diseases being analysed 
-
 data_efb$no_of_cols_with_efb[is.na(data_efb$no_of_cols_with_efb)]<-0
 data_efb$efb_bin<-data_efb$no_of_cols_with_efb
 data_efb$efb_bin<-replace(data_efb$efb_bin, data_efb$efb_bin >1,1)
@@ -380,6 +386,9 @@ efb_collapsed$efb_bin_present<- replace(efb_collapsed$efb_bin_present, efb_colla
 efb_apiary_mean<-efb_collapsed %>% 
   group_by(inspection_year,inspection_month) %>% 
   summarise(efb_bin_present=mean(efb_bin_present))
+
+#scale 
+efb_collapsed[c(2,3)]<- scale(efb_collapsed[c(2,3)])
 
 #Run a GLM to assess the temporal trends of disease prevalence with prevalence as a factor of year*month using a binomial GLM. 
 
@@ -422,7 +431,7 @@ efb_apiary_robustmean$inspection_year<-as.factor(efb_apiary_robustmean$inspectio
 
 #Plotting line plot of temporal trends using scale_colour_viridis to ensure plots are visually accessible to everyone.
 efb_lines<-ggplot(efb_apiary_robustmean, aes(x=inspection_month, y=efb_bin_present, color=inspection_year, group=inspection_year))+
-  labs(x="Inspection month", y="EFB prevalence")+geom_line()+theme_cowplot(12)+scale_colour_viridis(
+  labs(x="Inspection month", y="EFB prevalence")+geom_line()+theme_cowplot(12)+ggtitle("EFB prevalence")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -433,6 +442,7 @@ efb_lines<-ggplot(efb_apiary_robustmean, aes(x=inspection_month, y=efb_bin_prese
   )
 
 plot(efb_lines)
+
 
 
 
