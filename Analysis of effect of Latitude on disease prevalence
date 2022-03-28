@@ -119,7 +119,7 @@ cb_year_group$year_group<-factor(cb_year_group$year_group, levels= c("Early", "M
 
 #plot chalkbrood prevalence with relation to changing latitude
 cb_lat<-ggplot(cb_year_group, aes(x=Lat, y=chalkbrood_present,group=year_group, color=year_group))+
-  labs(x="Inspection month", y="Chalkbrood_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Chalkbrood distribution")+scale_colour_viridis(
+  labs(x="Latitude", y="Chalkbrood_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Chalkbrood distribution")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -237,7 +237,7 @@ sb_year_group$year_group<-factor(sb_year_group$year_group, levels= c("Early", "M
 
 
 sb_lat<-ggplot(sb_year_group, aes(x=Lat, y=sacbrood_present, color=year_group))+
-  labs(x="Inspection month", y="sacbrood_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Sacbrood distribution")+scale_colour_viridis(
+  labs(x="Latitude", y="sacbrood_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Sacbrood distribution")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -350,7 +350,7 @@ varo_year_group$year_group<-factor(varo_year_group$year_group, levels= c("Early"
 
 
 varo_lat<-ggplot(varo_year_group, aes(x=Lat, y=varroosis_present, color=year_group))+
-  labs(x="Inspection month", y="varroosis_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Varroosis distribution")+scale_colour_viridis(
+  labs(x="Latitude", y="varroosis_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("Varroosis distribution")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -471,7 +471,7 @@ afb_year_group$year_group<-factor(afb_year_group$year_group, levels= c("Early", 
 
 
 afb_lat<-ggplot(afb_year_group, aes(x=Lat, y=afb_present, color=year_group))+
-  labs(x="Inspection month", y="afb_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("AFB distribution")+scale_colour_viridis(
+  labs(x="Latitude", y="afb_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("AFB distribution")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
@@ -589,7 +589,7 @@ efb_year_group <- efb_spatial_robustmean %>%
 efb_year_group$year_group<-factor(efb_year_group$year_group, levels= c("Early", "Mid", "Late"))
 
 efb_lat<-ggplot(efb_year_group, aes(x=Lat, y=efb_present, color=year_group))+
-  labs(x="Inspection month", y="efb_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("EFB distribution")+scale_colour_viridis(
+  labs(x="Latitude", y="efb_prevalence")+geom_point()+theme_cowplot(12)+ggtitle("EFB distribution")+scale_colour_viridis(
     alpha = 1,
     begin = 0,
     end = 1,
